@@ -21,6 +21,7 @@ from typing import Any
 
 from funsearch.implementation import code_manipulation
 from funsearch.implementation import programs_database
+import multiprocessing
 
 
 class _FunctionLineVisitor(ast.NodeVisitor):
@@ -95,9 +96,35 @@ class Sandbox:
       test_input: str,
       timeout_seconds: int,
   ) -> tuple[Any, bool]:
-    """Returns `function_to_run(test_input)` and whether execution succeeded."""
-    raise NotImplementedError(
-        'Must provide a sandbox for executing untrusted code.')
+    def target(queue, program, function_to_run, test_input):
+      try:
+        scope = {}
+        exec(program, scope)
+        result = scope[function_to_run](test_input)
+        queue.put((result, True))
+      except Exception as e:
+        queue.put((e, False))
+
+    queue = multiprocessing.Queue()
+    process = multiprocessing.Process(
+      target=target, args=(queue, program, function_to_run, test_input))
+    process.start()
+    process.join(timeout_seconds)
+
+    if process.is_alive():
+      process.terminate()
+      process.join()
+      raise TimeoutError(f'Execution of {function_to_run}({test_input}) timed out.')
+
+    result, success = queue.get()
+    # if not success:
+    #   print('!! Error in running the program:')
+    #   print(program)
+    #   raise RuntimeError(f'Execution of {function_to_run}({test_input}) failed.')
+    return result, success
+    # """Returns `function_to_run(test_input)` and whether execution succeeded."""
+    # raise NotImplementedError(
+    #     'Must provide a sandbox for executing untrusted code.')
 
 
 def _calls_ancestor(program: str, function_to_evolve: str) -> bool:

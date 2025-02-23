@@ -21,6 +21,8 @@ import numpy as np
 from funsearch.implementation import evaluator
 from funsearch.implementation import programs_database
 
+from openai import OpenAI
+client = OpenAI()
 
 class LLM:
   """Language model that predicts continuation of provided source code."""
@@ -30,7 +32,33 @@ class LLM:
 
   def _draw_sample(self, prompt: str) -> str:
     """Returns a predicted continuation of `prompt`."""
-    raise NotImplementedError('Must provide a language model.')
+    # print('-' * 20, 'prompt', '-' * 20)
+    # print(prompt)
+    # print('-' * 20, 'prompt', '-' * 20)
+    completion = client.chat.completions.create(
+      model="gpt-4o-2024-11-20",
+      messages=[
+        {
+          "role": "system",
+          "content": """\
+You are a helpful assistant, you can help me write some code,
+Your output format is ```python\ndef FUNCTION_NAME(...):...\n```
+"""
+        },
+        {"role": "user", "content": prompt}
+      ],
+      stream=False
+    )
+    res = completion.choices[0].message.content
+    # 截取 ```python 到 ``` 的代码
+    res = res[res.find('```python') + 9:]
+    res = res[res.find('def') + 4:]
+    res = res[res.find('\n') + 1:]
+    res = res[:res.find('```')]
+    print('-' * 20, 'code', '-' * 20)
+    print(res)
+    print('-' * 20, 'code', '-' * 20)
+    return res
 
   def draw_samples(self, prompt: str) -> Collection[str]:
     """Returns multiple predicted continuations of `prompt`."""
